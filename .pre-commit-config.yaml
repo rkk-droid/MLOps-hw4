@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 4.5.0
+    hooks:
+      - id: sqlfluff-lint
+        args: ["--dialect", "clickhouse"]
+        files: ^dbt/(models|macros|tests|seeds)/
+        additional_dependencies:
+          - sqlfluff-templater-dbt==4.5.0
+          - dbt-core==1.12.6
+          - dbt-clickhouse==1.10.3
+      - id: sqlfluff-fix
+        args: ["--dialect", "clickhouse"]
+        files: ^dbt/(models|macros|tests|seeds)/
+        additional_dependencies:
+          - sqlfluff-templater-dbt==4.5.0
+          - dbt-core==1.12.6
+          - dbt-clickhouse==1.10.3
