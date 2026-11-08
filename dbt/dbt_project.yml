@@ -1,0 +1,54 @@
+name: transactions_analytics
+version: "1.0.0"
+config-version: 2
+profile: transactions_analytics
+require-dbt-version: [">=1.8.0", "<2.0.0"]
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+dispatch:
+  - macro_namespace: dbt
+    search_order: ["transactions_analytics", "dbt"]
+
+vars:
+  # Границы amount_bucket. xlarge и is_large_transaction начинаются с 200:
+  # это ближайший круглый порог к глобальному P95 суммы (около 196).
+  amount_small_lt: 10
+  amount_medium_lt: 50
+  large_amount_threshold: 200
+  # Доля фрода по портфелю около 0.57%.
+  # HIGH — заметно выше портфеля, MEDIUM — рядом с ним или чуть выше.
+  high_risk_fraud_rate: 2
+  medium_risk_fraud_rate: 0.5
+  # Подозрительный мерчант: доля фрода >= 1.5% и достаточно наблюдений.
+  # В этом датасете у каждого мерчанта не меньше 449 транзакций.
+  suspicious_fraud_rate: 1.5
+  suspicious_min_txn: 100
+  # Слот день/час считается повышенным риском, если его fraud_rate
+  # не ниже 1.5 долей общей fraud_rate.
+  elevated_risk_multiplier: 1.5
+
+models:
+  transactions_analytics:
+    staging:
+      +materialized: view
+      +tags: ["staging"]
+    marts:
+      +materialized: table
+      +tags: ["mart"]
+
+seeds:
+  transactions_analytics:
+    us_states:
+      +engine: MergeTree()
+      +order_by: state_code
+      +column_types:
+        state_code: String
+        state_name: String

@@ -1,0 +1,16 @@
+version: 2
+
+seeds:
+  - name: us_states
+    description: Справочник штатов США и округа Колумбия. Нужен, чтобы к коду штата добавить название.
+    columns:
+      - name: state_code
+        description: Двухбуквенный код штата.
+        data_tests:
+          - not_null
+          - unique
+      - name: state_name
+        description: Полное название штата.
+        data_tests:
+          - not_null
+          - unique

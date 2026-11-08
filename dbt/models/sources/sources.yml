@@ -1,0 +1,102 @@
+version: 2
+
+sources:
+  - name: transactions_db
+    description: Сырые транзакции из ClickHouse. Локально таблица загружается из train.csv.
+    schema: transactions_db
+    tables:
+      - name: transactions
+        description: >
+          Одна строка — одна транзакция. target = 1 означает фрод.
+          В источнике нет идентификатора клиента: человек определяется
+          именем, фамилией и координатами.
+        columns:
+          - name: transaction_time
+            description: Время транзакции.
+            data_tests:
+              - not_null
+          - name: merch
+            description: Название мерчанта.
+            data_tests:
+              - not_null
+          - name: cat_id
+            description: Категория мерчанта.
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values:
+                      - gas_transport
+                      - grocery_pos
+                      - grocery_net
+                      - home
+                      - shopping_pos
+                      - shopping_net
+                      - kids_pets
+                      - entertainment
+                      - food_dining
+                      - personal_care
+                      - health_fitness
+                      - misc_pos
+                      - misc_net
+                      - travel
+          - name: amount
+            description: Сумма транзакции.
+            data_tests:
+              - not_null
+              - dbt_expectations.expect_column_values_to_be_between:
+                  arguments:
+                    min_value: 0
+                    max_value: 1000000
+                    strictly: true
+          - name: name_1
+            description: Имя клиента.
+            data_tests:
+              - not_null
+          - name: name_2
+            description: Фамилия клиента.
+            data_tests:
+              - not_null
+          - name: gender
+            description: Пол клиента, M или F.
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: ["M", "F"]
+          - name: us_state
+            description: Штат клиента, двухбуквенный код.
+            data_tests:
+              - not_null
+          - name: lat
+            description: Широта клиента.
+            data_tests:
+              - not_null
+              - dbt_expectations.expect_column_values_to_be_between:
+                  arguments:
+                    min_value: -90
+                    max_value: 90
+          - name: lon
+            description: Долгота клиента.
+            data_tests:
+              - not_null
+              - dbt_expectations.expect_column_values_to_be_between:
+                  arguments:
+                    min_value: -180
+                    max_value: 180
+          - name: merchant_lat
+            description: Широта мерчанта.
+            data_tests:
+              - not_null
+          - name: merchant_lon
+            description: Долгота мерчанта.
+            data_tests:
+              - not_null
+          - name: target
+            description: Признак фрода. 1 — мошенническая транзакция, 0 — обычная.
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [0, 1]
+                    quote: false

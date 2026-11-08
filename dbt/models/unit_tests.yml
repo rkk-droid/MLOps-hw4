@@ -1,0 +1,431 @@
+version: 2
+
+unit_tests:
+  - name: test_stg_amount_buckets_and_calendar
+    model: stg_transactions
+    description: Проверяет границы сегментов суммы, флаг крупной транзакции, час и день недели.
+    given:
+      - input: source('transactions_db', 'transactions')
+        rows:
+          - transaction_time: "2019-06-03 14:05:00"
+            merch: " shop_small "
+            cat_id: " grocery "
+            amount: 9
+            name_1: " Ann "
+            name_2: "Lee"
+            gender: "m"
+            us_state: "ny"
+            lat: 1.0
+            lon: 2.0
+            merchant_lat: 1.0
+            merchant_lon: 2.0
+            target: 0
+          - transaction_time: "2019-06-09 00:15:00"
+            merch: "shop_medium"
+            cat_id: "grocery_pos"
+            amount: 10
+            name_1: "Bob"
+            name_2: "Kim"
+            gender: "F"
+            us_state: "TX"
+            lat: 3.0
+            lon: 4.0
+            merchant_lat: 3.0
+            merchant_lon: 4.0
+            target: 1
+          - transaction_time: "2019-06-03 14:05:00"
+            merch: "shop_medium_edge"
+            cat_id: "grocery_pos"
+            amount: 49
+            name_1: "Bob"
+            name_2: "Kim"
+            gender: "F"
+            us_state: "TX"
+            lat: 3.0
+            lon: 4.0
+            merchant_lat: 3.0
+            merchant_lon: 4.0
+            target: 0
+          - transaction_time: "2019-06-03 14:05:00"
+            merch: "shop_large"
+            cat_id: "grocery_pos"
+            amount: 50
+            name_1: "Bob"
+            name_2: "Kim"
+            gender: "M"
+            us_state: "TX"
+            lat: 3.0
+            lon: 4.0
+            merchant_lat: 3.0
+            merchant_lon: 4.0
+            target: 0
+          - transaction_time: "2019-06-03 14:05:00"
+            merch: "shop_xlarge"
+            cat_id: "travel"
+            amount: 200
+            name_1: "Bob"
+            name_2: "Kim"
+            gender: "M"
+            us_state: "TX"
+            lat: 3.0
+            lon: 4.0
+            merchant_lat: 3.0
+            merchant_lon: 4.0
+            target: 0
+    expect:
+      rows:
+        - merch: "shop_small"
+          cat_id: "grocery"
+          name_1: "Ann"
+          gender: "M"
+          us_state: "NY"
+          amount_bucket: "small"
+          is_large_transaction: 0
+          is_fraud: 0
+          hour_of_day: 14
+          day_of_week: 1
+          day_name: "Monday"
+        - merch: "shop_medium"
+          cat_id: "grocery_pos"
+          name_1: "Bob"
+          gender: "F"
+          us_state: "TX"
+          amount_bucket: "medium"
+          is_large_transaction: 0
+          is_fraud: 1
+          hour_of_day: 0
+          day_of_week: 0
+          day_name: "Sunday"
+        - merch: "shop_medium_edge"
+          cat_id: "grocery_pos"
+          name_1: "Bob"
+          gender: "F"
+          us_state: "TX"
+          amount_bucket: "medium"
+          is_large_transaction: 0
+          is_fraud: 0
+          hour_of_day: 14
+          day_of_week: 1
+          day_name: "Monday"
+        - merch: "shop_large"
+          cat_id: "grocery_pos"
+          name_1: "Bob"
+          gender: "M"
+          us_state: "TX"
+          amount_bucket: "large"
+          is_large_transaction: 0
+          is_fraud: 0
+          hour_of_day: 14
+          day_of_week: 1
+          day_name: "Monday"
+        - merch: "shop_xlarge"
+          cat_id: "travel"
+          name_1: "Bob"
+          gender: "M"
+          us_state: "TX"
+          amount_bucket: "xlarge"
+          is_large_transaction: 1
+          is_fraud: 0
+          hour_of_day: 14
+          day_of_week: 1
+          day_name: "Monday"
+
+  - name: test_customer_risk_default_thresholds
+    model: mart_customer_risk_profile
+    description: При порогах проекта 2% и 0.5% явный фрод становится HIGH, а клиент без фрода — LOW.
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - customer_id: "c_high"
+            name_1: "Ann"
+            name_2: "Lee"
+            us_state: "NY"
+            amount: 10
+            is_fraud: 1
+            transaction_time: "2019-01-01 00:00:00"
+          - customer_id: "c_high"
+            name_1: "Ann"
+            name_2: "Lee"
+            us_state: "NY"
+            amount: 30
+            is_fraud: 0
+            transaction_time: "2019-02-01 00:00:00"
+          - customer_id: "c_low"
+            name_1: "Bob"
+            name_2: "Kim"
+            us_state: "TX"
+            amount: 5
+            is_fraud: 0
+            transaction_time: "2019-01-01 00:00:00"
+          - customer_id: "c_low"
+            name_1: "Bob"
+            name_2: "Kim"
+            us_state: "TX"
+            amount: 15
+            is_fraud: 0
+            transaction_time: "2019-03-01 00:00:00"
+    expect:
+      rows:
+        - customer_id: "c_high"
+          name_1: "Ann"
+          name_2: "Lee"
+          us_state: "NY"
+          txn_count: 2
+          fraud_count: 1
+          total_amount: 40
+          avg_amount: 20
+          fraud_rate: 50
+          risk_segment: "HIGH"
+        - customer_id: "c_low"
+          name_1: "Bob"
+          name_2: "Kim"
+          us_state: "TX"
+          txn_count: 2
+          fraud_count: 0
+          total_amount: 20
+          avg_amount: 10
+          fraud_rate: 0
+          risk_segment: "LOW"
+
+  - name: test_customer_risk_segment_boundaries
+    model: mart_customer_risk_profile
+    description: Равенство порогу относится к более рискованному сегменту.
+    overrides:
+      vars:
+        high_risk_fraud_rate: 50
+        medium_risk_fraud_rate: 25
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - customer_id: "c_high"
+            name_1: "Ann"
+            name_2: "Lee"
+            us_state: "NY"
+            amount: 10
+            is_fraud: 1
+            transaction_time: "2019-01-01 00:00:00"
+          - customer_id: "c_high"
+            name_1: "Ann"
+            name_2: "Lee"
+            us_state: "NY"
+            amount: 10
+            is_fraud: 0
+            transaction_time: "2019-01-02 00:00:00"
+          - customer_id: "c_med"
+            name_1: "Bea"
+            name_2: "Ortiz"
+            us_state: "CA"
+            amount: 10
+            is_fraud: 1
+            transaction_time: "2019-01-01 00:00:00"
+          - customer_id: "c_med"
+            name_1: "Bea"
+            name_2: "Ortiz"
+            us_state: "CA"
+            amount: 10
+            is_fraud: 0
+            transaction_time: "2019-01-02 00:00:00"
+          - customer_id: "c_med"
+            name_1: "Bea"
+            name_2: "Ortiz"
+            us_state: "CA"
+            amount: 10
+            is_fraud: 0
+            transaction_time: "2019-01-03 00:00:00"
+          - customer_id: "c_med"
+            name_1: "Bea"
+            name_2: "Ortiz"
+            us_state: "CA"
+            amount: 10
+            is_fraud: 0
+            transaction_time: "2019-01-04 00:00:00"
+          - customer_id: "c_low"
+            name_1: "Bob"
+            name_2: "Kim"
+            us_state: "TX"
+            amount: 8
+            is_fraud: 0
+            transaction_time: "2019-01-01 00:00:00"
+          - customer_id: "c_low"
+            name_1: "Bob"
+            name_2: "Kim"
+            us_state: "TX"
+            amount: 8
+            is_fraud: 0
+            transaction_time: "2019-01-02 00:00:00"
+    expect:
+      rows:
+        - customer_id: "c_high"
+          txn_count: 2
+          fraud_count: 1
+          fraud_rate: 50
+          risk_segment: "HIGH"
+        - customer_id: "c_med"
+          txn_count: 4
+          fraud_count: 1
+          fraud_rate: 25
+          risk_segment: "MEDIUM"
+        - customer_id: "c_low"
+          txn_count: 2
+          fraud_count: 0
+          fraud_rate: 0
+          risk_segment: "LOW"
+
+  - name: test_merchant_suspicious_flag
+    model: mart_merchant_analytics
+    description: Флаг подозрительности требует и долю фрода, и минимальное число транзакций.
+    overrides:
+      vars:
+        suspicious_fraud_rate: 25
+        suspicious_min_txn: 4
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - merch: "m_hit"
+            amount: 10
+            is_fraud: 1
+            customer_id: "c1"
+            cat_id: "travel"
+          - merch: "m_hit"
+            amount: 10
+            is_fraud: 0
+            customer_id: "c2"
+            cat_id: "travel"
+          - merch: "m_hit"
+            amount: 10
+            is_fraud: 0
+            customer_id: "c3"
+            cat_id: "travel"
+          - merch: "m_hit"
+            amount: 10
+            is_fraud: 0
+            customer_id: "c4"
+            cat_id: "home"
+          - merch: "m_clean"
+            amount: 5
+            is_fraud: 0
+            customer_id: "c1"
+            cat_id: "home"
+          - merch: "m_clean"
+            amount: 5
+            is_fraud: 0
+            customer_id: "c1"
+            cat_id: "home"
+          - merch: "m_clean"
+            amount: 5
+            is_fraud: 0
+            customer_id: "c1"
+            cat_id: "home"
+          - merch: "m_clean"
+            amount: 5
+            is_fraud: 0
+            customer_id: "c1"
+            cat_id: "home"
+          - merch: "m_short"
+            amount: 7
+            is_fraud: 1
+            customer_id: "c9"
+            cat_id: "travel"
+    expect:
+      rows:
+        - merch: "m_hit"
+          txn_count: 4
+          turnover: 40
+          avg_amount: 10
+          fraud_count: 1
+          fraud_rate: 25
+          unique_customers: 4
+          category_count: 2
+          is_suspicious: 1
+        - merch: "m_clean"
+          txn_count: 4
+          turnover: 20
+          avg_amount: 5
+          fraud_count: 0
+          fraud_rate: 0
+          unique_customers: 1
+          category_count: 1
+          is_suspicious: 0
+        - merch: "m_short"
+          txn_count: 1
+          turnover: 7
+          avg_amount: 7
+          fraud_count: 1
+          fraud_rate: 100
+          unique_customers: 1
+          category_count: 1
+          is_suspicious: 0
+
+  - name: test_hourly_elevated_risk
+    model: mart_hourly_fraud_pattern
+    description: Слот с долей фрода в 1.5 раза выше общей помечается как повышенный риск.
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - day_of_week: 1
+            day_name: "Monday"
+            hour_of_day: 10
+            is_fraud: 1
+            amount: 10
+          - day_of_week: 1
+            day_name: "Monday"
+            hour_of_day: 10
+            is_fraud: 0
+            amount: 20
+          - day_of_week: 1
+            day_name: "Monday"
+            hour_of_day: 11
+            is_fraud: 0
+            amount: 10
+          - day_of_week: 1
+            day_name: "Monday"
+            hour_of_day: 11
+            is_fraud: 0
+            amount: 10
+    expect:
+      rows:
+        - day_of_week: 1
+          day_name: "Monday"
+          hour_of_day: 10
+          txn_count: 2
+          fraud_count: 1
+          total_amount: 30
+          fraud_rate: 50
+          overall_fraud_rate: 25
+          is_elevated_risk: 1
+        - day_of_week: 1
+          day_name: "Monday"
+          hour_of_day: 11
+          txn_count: 2
+          fraud_count: 0
+          total_amount: 20
+          fraud_rate: 0
+          overall_fraud_rate: 25
+          is_elevated_risk: 0
+
+  - name: test_daily_large_transaction_share
+    model: mart_daily_state_metrics
+    description: Доля крупных транзакций считается от уже размеченного флага staging.
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - transaction_date: "2019-06-03"
+            us_state: "CA"
+            amount: 10
+            is_large_transaction: 0
+          - transaction_date: "2019-06-03"
+            us_state: "CA"
+            amount: 50
+            is_large_transaction: 0
+          - transaction_date: "2019-06-03"
+            us_state: "CA"
+            amount: 200
+            is_large_transaction: 1
+    expect:
+      rows:
+        - transaction_date: "2019-06-03"
+          us_state: "CA"
+          txn_count: 3
+          total_amount: 260
+          large_txn_count: 1
+          large_txn_share: 33.3333
